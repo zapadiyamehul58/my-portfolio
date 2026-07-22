@@ -1,0 +1,6 @@
+{
+  "name": "Mehul Zapadiya Portfolio",
+  "description": "A dynamic full-stack portfolio website for Mehul Zapadiya featuring a public showcase of projects, skills, and education, alongside a secure administrative dashboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
