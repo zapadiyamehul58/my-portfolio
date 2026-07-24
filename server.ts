@@ -588,6 +588,13 @@ app.delete("/api/messages/:id", authMiddleware, (req, res) => {
 // POST: Upload File (handles images/documents uploaded as Base64 strings)
 app.post("/api/upload", authMiddleware, (req, res) => {
   try {
+    if (process.env.VERCEL) {
+      return res.status(403).json({ 
+        success: false, 
+        error: "Vercel's filesystem is read-only. To add photos, please run the app locally, upload through the admin panel, and then push your changes to GitHub." 
+      });
+    }
+
     const { filename, base64Data } = req.body;
     if (!filename || !base64Data) {
       return res.status(400).json({ success: false, error: "filename and base64Data are required" });

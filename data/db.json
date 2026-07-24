@@ -32,8 +32,8 @@
         "value": "3+"
       }
     ],
-    "profile_image_url": "/uploads/passport_size_photo_1784098226480.png",
-    "resume_url": "/uploads/resume__1__1784098230126.pdf",
+    "profile_image_url": "/uploads/passport_size.png",
+    "resume_url": "/uploads/resume.pdf",
     "email": "zapadiyamehul58@gmail.com",
     "phone": "9313296581",
     "github_url": "https://github.com/zapadiyamehul58-stack",
@@ -301,7 +301,7 @@
       "id": 1,
       "title": "Prompt Extractor",
       "description": "An intelligent, high-performance tool for extracting prompts and structuring complex inputs for large language models.",
-      "image_url": "/uploads/prompt_extractor_1784100195178.png",
+      "image_url": "/uploads/prompt_extractor.png",
       "github_url": "https://github.com/zapadiyamehul58-stack/Prompt-Extractor",
       "live_url": "",
       "tech_stack": [
@@ -317,7 +317,7 @@
       "id": 2,
       "title": "Image Generator",
       "description": "An AI-powered generator utilizing deep learning models to synthesize stunning, customized visual imagery.",
-      "image_url": "/uploads/image_generator_1784100358792.png",
+      "image_url": "/uploads/image_generator.png",
       "github_url": "https://github.com/zapadiyamehul58-stack/Image-Generator",
       "live_url": "",
       "tech_stack": [
@@ -333,7 +333,7 @@
       "id": 3,
       "title": "India Fileshare",
       "description": "A high-speed, secure, and decentralized file-sharing platform designed for seamless resource distribution.",
-      "image_url": "/uploads/india_fileshare_1784100378398.png",
+      "image_url": "/uploads/india_fileshare.png",
       "github_url": "https://github.com/zapadiyamehul58-stack/india_fileshare",
       "live_url": "",
       "tech_stack": [
@@ -349,7 +349,7 @@
       "id": 4,
       "title": "Gujarat Eco Grid",
       "description": "An eco-friendly, green computing grid tracking data-driven infrastructure and regional emissions patterns.",
-      "image_url": "/uploads/gujarat_eco_grid_1784100397600.png",
+      "image_url": "/uploads/gec_v2.png",
       "github_url": "https://github.com/zapadiyamehul58-stack/Gujrat-eco-grid",
       "live_url": "",
       "tech_stack": [
@@ -365,7 +365,7 @@
       "id": 5,
       "title": "DS with Python",
       "description": "A comprehensive laboratory repository of data science algorithms, feature engineering, and predictive models.",
-      "image_url": "/uploads/ds_with_python_1784100412436.png",
+      "image_url": "/uploads/dswp_v2.png",
       "github_url": "https://github.com/zapadiyamehul58-stack/DS-with-Python",
       "live_url": "",
       "tech_stack": [
@@ -381,7 +381,7 @@
       "id": 6,
       "title": "SwiftShare",
       "description": "A streamlined, low-latency client-server sharing application crafted for real-time asset transmission.",
-      "image_url": "/uploads/swiftshare_1784100324090.png",
+      "image_url": "/uploads/swiftshare.png",
       "github_url": "https://github.com/zapadiyamehul58-stack/swiftshere",
       "live_url": "",
       "tech_stack": [
