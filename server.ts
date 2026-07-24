@@ -2,11 +2,22 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
+import { Resend } from "resend";
+import rateLimit from "express-rate-limit";
+import xss from "xss";
 import { db, hashPassword } from "./server/db.js";
 
 const app = express();
 const PORT = 8000;
 const JWT_SECRET = process.env.JWT_SECRET || "mehul_zapadiya_portfolio_jwt_secret_2026_super_secure";
+const resend = new Resend(process.env.RESEND_API_KEY || "re_mock_key");
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "zapadiyamehul58@gmail.com";
+
+const messageRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { success: false, error: "Too many messages sent from this IP, please try again after 15 minutes." }
+});
 
 // Ensure upload directories exist
 const UPLOADS_DIR = path.join(process.cwd(), "uploads");
@@ -162,13 +173,52 @@ app.get("/api/education", (req, res) => {
 });
 
 // POST: Send a message from contact form
-app.post("/api/messages", (req, res) => {
+app.post("/api/messages", messageRateLimiter, async (req, res) => {
   try {
     const { name, email, phone, subject, message } = req.body;
     if (!name || !email || !message) {
       return res.status(400).json({ success: false, error: "Missing required fields (name, email, message)" });
     }
-    const newMessage = db.createMessage({ name, email, phone, subject, message });
+
+    const sanitizedName = xss(name);
+    const sanitizedEmail = xss(email);
+    const sanitizedPhone = phone ? xss(phone) : "";
+    const sanitizedSubject = subject ? xss(subject) : "";
+    const sanitizedMessage = xss(message);
+
+    const newMessage = db.createMessage({ 
+      name: sanitizedName, 
+      email: sanitizedEmail, 
+      phone: sanitizedPhone, 
+      subject: sanitizedSubject, 
+      message: sanitizedMessage 
+    });
+
+    // Send emails in the background to not block the request
+    (async () => {
+      try {
+        if (process.env.RESEND_API_KEY) {
+          // Notification to admin
+          await resend.emails.send({
+            from: "Portfolio <onboarding@resend.dev>",
+            to: ADMIN_EMAIL,
+            subject: `New Contact Message from ${sanitizedName}`,
+            text: `Name: ${sanitizedName}\nEmail: ${sanitizedEmail}\nPhone: ${sanitizedPhone}\nSubject: ${sanitizedSubject}\n\nMessage:\n${sanitizedMessage}`
+          });
+          
+          // Confirmation to visitor
+          await resend.emails.send({
+            from: "Portfolio <onboarding@resend.dev>",
+            to: sanitizedEmail,
+            subject: "Thank you for contacting me",
+            text: `Hi ${sanitizedName},\n\nThank you for reaching out. I have received your message and will get back to you soon.\n\nBest regards,\nMehul Zapadiya`
+          });
+        }
+      } catch (err) {
+        console.error("Email sending failed:", err);
+      }
+    })();
+
     res.json({ success: true, data: newMessage });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -241,25 +291,31 @@ app.get("/api/auth/me", authMiddleware, (req: any, res) => {
 });
 
 // POST: Send a reply email in the background
-app.post("/api/messages/send-reply", authMiddleware, (req: any, res) => {
+app.post("/api/messages/send-reply", authMiddleware, async (req: any, res) => {
   try {
-    const { to, subject, body } = req.body;
-    if (!to || !subject || !body) {
-      return res.status(400).json({ success: false, error: "Missing required fields: to, subject, body" });
+    const { messageId, body } = req.body;
+    if (!messageId || !body) {
+      return res.status(400).json({ success: false, error: "Missing required fields: messageId, body" });
+    }
+
+    const message = db.getMessage(Number(messageId));
+    if (!message) {
+      return res.status(404).json({ success: false, error: "Message not found" });
     }
     
-    // NOTE: This is currently a mock implementation.
-    // To send real emails, you'll need to install 'nodemailer' when your node environment is fixed.
-    // Example:
-    // const transporter = nodemailer.createTransport({ service: 'gmail', auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } });
-    // await transporter.sendMail({ from: process.env.SMTP_USER, to, subject, text: body });
-    
-    console.log(`\n=== EMAIL SENT ===\nTo: ${to}\nSubject: ${subject}\nBody: ${body}\n==================\n`);
+    if (process.env.RESEND_API_KEY) {
+      await resend.emails.send({
+        from: "Portfolio <onboarding@resend.dev>",
+        to: message.email,
+        subject: `Re: Contact from ${message.name}`,
+        text: body
+      });
+    } else {
+      console.log(`\n=== MOCK EMAIL SENT ===\nTo: ${message.email}\nSubject: Re: Contact from ${message.name}\nBody: ${body}\n==================\n`);
+    }
 
-    // Simulate network delay
-    setTimeout(() => {
-      res.json({ success: true, message: "Email sent successfully in the background." });
-    }, 1000);
+    const updatedMessage = db.addReplyToMessage(Number(messageId), body);
+    res.json({ success: true, message: "Reply sent and saved successfully.", data: updatedMessage });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }

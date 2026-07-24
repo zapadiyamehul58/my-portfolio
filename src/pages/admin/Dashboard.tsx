@@ -1596,9 +1596,27 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                             <td colSpan={5} className="p-5 border-b border-white/5 bg-[#151822]/80 backdrop-blur/20">
                               <div className="space-y-4 max-w-3xl animate-fadeIn text-left">
                                 <div className="p-4 rounded-xl bg-[#0f111a]/60 backdrop-blur-md/50 border border-white/5">
-                                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-500 block mb-1">Original Message</span>
+                                  <div className="flex justify-between items-center mb-1">
+                                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-500 block">Original Message</span>
+                                    <span className="text-[10px] font-mono text-slate-500">{new Date(msg.created_at).toLocaleString()}</span>
+                                  </div>
                                   <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap">{msg.message}</p>
                                 </div>
+
+                                {msg.replies && msg.replies.length > 0 && (
+                                  <div className="space-y-3 mt-4">
+                                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-500 block">Conversation History</span>
+                                    {msg.replies.map((reply, idx) => (
+                                      <div key={idx} className="p-4 rounded-xl bg-indigo-500/10 border border-indigo-500/20 ml-8">
+                                        <div className="flex justify-between items-center mb-2">
+                                          <span className="text-xs font-semibold text-indigo-300">You (Admin)</span>
+                                          <span className="text-[10px] font-mono text-slate-500">{new Date(reply.created_at).toLocaleString()}</span>
+                                        </div>
+                                        <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap">{reply.body}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
 
                                 <div className="space-y-3">
                                   <label className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400 block">
@@ -1617,16 +1635,14 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                                           setIsSubmitting(true);
                                           try {
                                             const res = await api.sendReply(
-                                              msg.email,
-                                              "Re: Portfolio Message - Mehul Zapadiya",
+                                              msg.id,
                                               replyText || `Hi ${msg.name},\n\n`
                                             );
                                             
                                             if (res.success) {
-                                              if (!msg.read) await handleMessageMarkRead(msg.id, true);
-                                              triggerStatus("success", "Message sent successfully in the background!");
+                                              triggerStatus("success", "Reply sent and saved successfully!");
                                               setReplyText("");
-                                              setExpandedMessageId(null);
+                                              loadAllData();
                                             } else {
                                               triggerStatus("error", res.error || "Failed to send message.");
                                             }

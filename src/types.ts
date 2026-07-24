@@ -56,6 +56,11 @@ export interface Education {
   order: number;
 }
 
+export interface MessageReply {
+  body: string;
+  created_at: string;
+}
+
 export interface Message {
   id: number;
   name: string;
@@ -64,6 +69,7 @@ export interface Message {
   message: string;
   read: boolean;
   created_at: string;
+  replies?: MessageReply[];
 }
 
 export interface DashboardStats {

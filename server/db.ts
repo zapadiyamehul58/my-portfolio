@@ -536,7 +536,8 @@ export class Database {
       ...msg,
       id: nextId,
       read: false,
-      created_at: new Date().toISOString()
+      created_at: new Date().toISOString(),
+      replies: []
     };
     this.data.messages.push(newMessage);
     this.save();
@@ -559,6 +560,23 @@ export class Database {
       return true;
     }
     return false;
+  }
+
+  addReplyToMessage(id: number, body: string): Message | undefined {
+    const idx = this.data.messages.findIndex(m => m.id === id);
+    if (idx === -1) return undefined;
+    
+    const message = this.data.messages[idx];
+    if (!message.replies) {
+      message.replies = [];
+    }
+    message.replies.push({
+      body,
+      created_at: new Date().toISOString()
+    });
+    
+    this.save();
+    return message;
   }
 
   // Blog operations
