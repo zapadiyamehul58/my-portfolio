@@ -202,6 +202,7 @@ app.post("/api/messages", messageRateLimiter, async (req, res) => {
           await resend.emails.send({
             from: "Portfolio <onboarding@resend.dev>",
             to: ADMIN_EMAIL,
+            reply_to: sanitizedEmail,
             subject: `New Contact Message from ${sanitizedName}`,
             text: `Name: ${sanitizedName}\nEmail: ${sanitizedEmail}\nPhone: ${sanitizedPhone}\nSubject: ${sanitizedSubject}\n\nMessage:\n${sanitizedMessage}`
           });
