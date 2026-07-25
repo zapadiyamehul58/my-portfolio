@@ -2,7 +2,7 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
-import { Resend } from "resend";
+import nodemailer from "nodemailer";
 import rateLimit from "express-rate-limit";
 import xss from "xss";
 import { db, hashPassword } from "./server/db.js";
@@ -10,7 +10,13 @@ import { db, hashPassword } from "./server/db.js";
 const app = express();
 const PORT = 8000;
 const JWT_SECRET = process.env.JWT_SECRET || "mehul_zapadiya_portfolio_jwt_secret_2026_super_secure";
-const resend = new Resend(process.env.RESEND_API_KEY || "re_mock_key");
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.ADMIN_EMAIL || "zapadiyamehul58@gmail.com",
+    pass: process.env.GMAIL_APP_PASSWORD || "",
+  }
+});
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "zapadiyamehul58@gmail.com";
 
 const messageRateLimiter = rateLimit({
@@ -197,23 +203,25 @@ app.post("/api/messages", messageRateLimiter, async (req, res) => {
     // Send emails in the background to not block the request
     (async () => {
       try {
-        if (process.env.RESEND_API_KEY) {
+        if (process.env.GMAIL_APP_PASSWORD) {
           // Notification to admin
-          await resend.emails.send({
-            from: "Portfolio <onboarding@resend.dev>",
+          await transporter.sendMail({
+            from: ADMIN_EMAIL,
             to: ADMIN_EMAIL,
-            reply_to: sanitizedEmail,
+            replyTo: sanitizedEmail,
             subject: `New Contact Message from ${sanitizedName}`,
             text: `Name: ${sanitizedName}\nEmail: ${sanitizedEmail}\nPhone: ${sanitizedPhone}\nSubject: ${sanitizedSubject}\n\nMessage:\n${sanitizedMessage}`
           });
           
           // Confirmation to visitor
-          await resend.emails.send({
-            from: "Portfolio <onboarding@resend.dev>",
+          await transporter.sendMail({
+            from: ADMIN_EMAIL,
             to: sanitizedEmail,
             subject: "Thank you for contacting me",
             text: `Hi ${sanitizedName},\n\nThank you for reaching out. I have received your message and will get back to you soon.\n\nBest regards,\nMehul Zapadiya`
           });
+        } else {
+          console.log(`\n=== GMAIL APP PASSWORD NOT SET ===\nWould have sent emails to admin and visitor.\n`);
         }
       } catch (err) {
         console.error("Email sending failed:", err);
@@ -304,9 +312,9 @@ app.post("/api/messages/send-reply", authMiddleware, async (req: any, res) => {
       return res.status(404).json({ success: false, error: "Message not found" });
     }
     
-    if (process.env.RESEND_API_KEY) {
-      await resend.emails.send({
-        from: "Portfolio <onboarding@resend.dev>",
+    if (process.env.GMAIL_APP_PASSWORD) {
+      await transporter.sendMail({
+        from: ADMIN_EMAIL,
         to: message.email,
         subject: `Re: Contact from ${message.name}`,
         text: body
