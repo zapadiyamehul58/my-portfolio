@@ -86,22 +86,16 @@ export default function Skills({ skills }: SkillsProps) {
         </div>
 
         {/* Skills Grid */}
-        <motion.div
-          layout
-          className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4"
-        >
-          <AnimatePresence>
-            {filteredSkills.map((skill, idx) => (
-              <motion.div
-                layout
-                key={skill.id}
-                initial={{ opacity: 0, scale: 0.8, y: 15 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.8, y: -15 }}
-                transition={{ type: "spring", stiffness: 200, damping: 15, delay: idx * 0.03 }}
-                whileHover={{ y: -3, backgroundColor: "rgba(30, 41, 59, 0.6)" }}
-                className="p-4 rounded-xl bg-slate-900/40 border border-white/5 backdrop-blur-md shadow-lg flex items-center gap-3 text-left transition-all hover:shadow-[0_0_20px_rgba(14,165,233,0.2)] group cursor-default"
-              >
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          {filteredSkills.map((skill, idx) => (
+            <motion.div
+              key={`${activeTab}-${skill.id}`}
+              initial={{ opacity: 0, scale: 0.8, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              transition={{ type: "spring", stiffness: 200, damping: 15, delay: idx * 0.03 }}
+              whileHover={{ y: -3, backgroundColor: "rgba(30, 41, 59, 0.6)" }}
+              className="p-4 rounded-xl bg-slate-900/40 border border-white/5 backdrop-blur-md shadow-lg flex items-center gap-3 text-left transition-all hover:shadow-[0_0_20px_rgba(14,165,233,0.2)] group cursor-default"
+            >
               <div className="flex-shrink-0 text-cyan-400 group-hover:text-cyan-400 transition-colors">
                 <CheckCircle className="h-4.5 w-4.5" />
               </div>
@@ -115,8 +109,7 @@ export default function Skills({ skills }: SkillsProps) {
               </div>
             </motion.div>
           ))}
-          </AnimatePresence>
-        </motion.div>
+        </div>
 
         {filteredSkills.length === 0 && (
           <div className="text-center py-12 text-text-secondary font-mono text-sm">
