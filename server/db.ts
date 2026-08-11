@@ -364,9 +364,63 @@ export class Database {
 
   private save() {
     try {
-      fs.writeFileSync(DB_FILE, JSON.stringify(this.data, null, 2), "utf-8");
+      const jsonContent = JSON.stringify(this.data, null, 2);
+      fs.writeFileSync(DB_FILE, jsonContent, "utf-8");
+      // Fire and forget sync to github if token exists
+      this.syncToGithub(jsonContent).catch(e => console.error(e));
     } catch (err) {
       console.error("Error writing database file:", err);
+    }
+  }
+
+  private async syncToGithub(content: string) {
+    const token = process.env.GITHUB_PAT;
+    if (!token) return; // Only sync if token is provided (in production)
+
+    const owner = "zapadiyamehul58";
+    const repo = "my-portfolio";
+    const path = "data/db.json";
+    
+    try {
+      // 1. Get the current file SHA
+      const getRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}`, {
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Accept": "application/vnd.github.v3+json",
+          "User-Agent": "Portfolio-Admin-Panel"
+        }
+      });
+      
+      let sha = "";
+      if (getRes.ok) {
+        const fileData = await getRes.json();
+        sha = fileData.sha;
+      }
+      
+      // 2. Update the file
+      const base64Content = Buffer.from(content, 'utf-8').toString('base64');
+      const putRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}`, {
+        method: "PUT",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Accept": "application/vnd.github.v3+json",
+          "Content-Type": "application/json",
+          "User-Agent": "Portfolio-Admin-Panel"
+        },
+        body: JSON.stringify({
+          message: "Database update from Admin Panel",
+          content: base64Content,
+          sha: sha || undefined
+        })
+      });
+
+      if (!putRes.ok) {
+        console.error("GitHub API Error:", await putRes.text());
+      } else {
+        console.log("Successfully synced database to GitHub!");
+      }
+    } catch (err) {
+      console.error("Failed to sync database to GitHub:", err);
     }
   }
 
