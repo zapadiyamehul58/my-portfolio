@@ -3,6 +3,7 @@ import path from "path";
 import fs from "fs";
 import crypto from "crypto";
 import nodemailer from "nodemailer";
+import { Resend } from "resend";
 import rateLimit from "express-rate-limit";
 import xss from "xss";
 import { db, hashPassword } from "./server/db.js";
@@ -18,6 +19,24 @@ const transporter = nodemailer.createTransport({
   }
 });
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "zapadiyamehul58@gmail.com";
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+
+async function sendMailHelper(options: { from: string, to: string, replyTo?: string, subject: string, text: string, html?: string }) {
+  if (resend) {
+    await resend.emails.send({
+      from: "Mehul Zapadiya <onboarding@resend.dev>", // Change this to your verified domain (e.g. admin@yourdomain.com) when ready
+      to: [options.to],
+      reply_to: options.replyTo,
+      subject: options.subject,
+      text: options.text,
+      html: options.html
+    });
+  } else if (process.env.GMAIL_APP_PASSWORD) {
+    await transporter.sendMail(options);
+  } else {
+    console.log(`\n=== MOCK EMAIL SENT ===\nTo: ${options.to}\nSubject: ${options.subject}\nBody: ${options.text}\n==================\n`);
+  }
+}
 
 const messageRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -203,26 +222,22 @@ app.post("/api/messages", messageRateLimiter, async (req, res) => {
     // Send emails in the background to not block the request
     (async () => {
       try {
-        if (process.env.GMAIL_APP_PASSWORD) {
-          // Notification to admin
-          await transporter.sendMail({
-            from: ADMIN_EMAIL,
-            to: ADMIN_EMAIL,
-            replyTo: sanitizedEmail,
-            subject: `New Contact Message from ${sanitizedName}`,
-            text: `Name: ${sanitizedName}\nEmail: ${sanitizedEmail}\nPhone: ${sanitizedPhone}\nSubject: ${sanitizedSubject}\n\nMessage:\n${sanitizedMessage}`
-          });
-          
-          // Confirmation to visitor
-          await transporter.sendMail({
-            from: ADMIN_EMAIL,
-            to: sanitizedEmail,
-            subject: "Thank you for contacting me",
-            text: `Hi ${sanitizedName},\n\nThank you for reaching out. I have received your message and will get back to you soon.\n\nBest regards,\nMehul Zapadiya`
-          });
-        } else {
-          console.log(`\n=== GMAIL APP PASSWORD NOT SET ===\nWould have sent emails to admin and visitor.\n`);
-        }
+        // Notification to admin
+        await sendMailHelper({
+          from: ADMIN_EMAIL,
+          to: ADMIN_EMAIL,
+          replyTo: sanitizedEmail,
+          subject: `New Contact Message from ${sanitizedName}`,
+          text: `Name: ${sanitizedName}\nEmail: ${sanitizedEmail}\nPhone: ${sanitizedPhone}\nSubject: ${sanitizedSubject}\n\nMessage:\n${sanitizedMessage}`
+        });
+        
+        // Confirmation to visitor
+        await sendMailHelper({
+          from: ADMIN_EMAIL,
+          to: sanitizedEmail,
+          subject: "Thank you for contacting me",
+          text: `Hi ${sanitizedName},\n\nThank you for reaching out. I have received your message and will get back to you soon.\n\nBest regards,\nMehul Zapadiya`
+        });
       } catch (err) {
         console.error("Email sending failed:", err);
       }
@@ -312,16 +327,24 @@ app.post("/api/messages/send-reply", authMiddleware, async (req: any, res) => {
       return res.status(404).json({ success: false, error: "Message not found" });
     }
     
-    if (process.env.GMAIL_APP_PASSWORD) {
-      await transporter.sendMail({
-        from: ADMIN_EMAIL,
-        to: message.email,
-        subject: `Re: Contact from ${message.name}`,
-        text: body
-      });
-    } else {
-      console.log(`\n=== MOCK EMAIL SENT ===\nTo: ${message.email}\nSubject: Re: Contact from ${message.name}\nBody: ${body}\n==================\n`);
-    }
+    const htmlBody = `
+      <div style="font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif,'Apple Color Emoji','Segoe UI Emoji'; color: #24292f; max-width: 800px;">
+        <div style="padding: 16px 0; font-size: 14px; line-height: 1.5; white-space: pre-wrap;">${body}</div>
+        <hr style="border: none; border-top: 1px solid #d0d7de; margin: 16px 0;" />
+        <div style="color: #57606a; font-size: 12px; line-height: 1.5;">
+          <p style="margin: 0;">Reply to this email directly or visit <a href="https://mehulzapadiya.com" style="color: #0969da; text-decoration: none;">my portfolio</a>.</p>
+          <p style="margin: 0;">You are receiving this because you contacted me through my website.</p>
+        </div>
+      </div>
+    `;
+
+    await sendMailHelper({
+      from: ADMIN_EMAIL,
+      to: message.email,
+      subject: `Re: Contact from ${message.name}`,
+      text: body,
+      html: htmlBody
+    });
 
     const updatedMessage = db.addReplyToMessage(Number(messageId), body);
     res.json({ success: true, message: "Reply sent and saved successfully.", data: updatedMessage });
