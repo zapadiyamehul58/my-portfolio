@@ -113,6 +113,7 @@ export default function Achievements({ achievements }: AchievementsProps) {
                       {item.category || "Honor"}
                     </p>
                   </div>
+                </div>
               </motion.a>
             );
           })}
