@@ -74,24 +74,8 @@ export default function Achievements({ achievements }: AchievementsProps) {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {achievements.map((item, idx) => {
             
-            // Dynamic styling for top 3
             let rankContainerClass = "border-white/5 bg-slate-900/40 hover:border-cyan-500/30 hover:bg-slate-800/60 shadow-lg";
-            let rankNumberClass = "text-slate-600 group-hover:text-cyan-400";
             let iconContainerClass = "bg-slate-800/50 border-white/5 text-cyan-400 group-hover:bg-indigo-600";
-            
-            if (idx === 0) { // 1st - Gold
-              rankContainerClass = "border-yellow-400/50 bg-yellow-400/5 hover:border-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.15)] hover:shadow-[0_0_20px_rgba(250,204,21,0.3)]";
-              rankNumberClass = "text-yellow-400 group-hover:text-yellow-300 text-lg";
-              iconContainerClass = "bg-yellow-400/20 border-yellow-400/50 text-yellow-400 group-hover:bg-yellow-400 group-hover:text-yellow-900";
-            } else if (idx === 1) { // 2nd - Silver
-              rankContainerClass = "border-slate-300/50 bg-slate-300/5 hover:border-slate-300 shadow-[0_0_15px_rgba(203,213,225,0.1)] hover:shadow-[0_0_20px_rgba(203,213,225,0.2)]";
-              rankNumberClass = "text-slate-300 group-hover:text-white text-base";
-              iconContainerClass = "bg-slate-300/20 border-slate-300/50 text-slate-300 group-hover:bg-slate-300 group-hover:text-slate-900";
-            } else if (idx === 2) { // 3rd - Bronze
-              rankContainerClass = "border-amber-600/50 bg-amber-600/5 hover:border-amber-500 shadow-[0_0_15px_rgba(217,119,6,0.1)] hover:shadow-[0_0_20px_rgba(217,119,6,0.2)]";
-              rankNumberClass = "text-amber-500 group-hover:text-amber-400 text-base";
-              iconContainerClass = "bg-amber-600/20 border-amber-600/50 text-amber-500 group-hover:bg-amber-500 group-hover:text-amber-950";
-            }
 
             return (
               <motion.a
@@ -125,16 +109,10 @@ export default function Achievements({ achievements }: AchievementsProps) {
                     <h4 className="text-[15px] font-semibold text-slate-100 group-hover:text-white truncate">
                       {item.title}
                     </h4>
-                    <p className={`text-[12px] mt-0.5 truncate font-mono tracking-wide uppercase ${idx < 3 ? 'opacity-90' : 'text-cyan-400/80'}`}>
+                    <p className={`text-[12px] mt-0.5 truncate font-mono tracking-wide uppercase text-cyan-400/80`}>
                       {item.category || "Honor"}
                     </p>
                   </div>
-                </div>
-
-                {/* Ranking Number */}
-                <div className={`font-mono font-bold transition-colors shrink-0 pr-2 ${rankNumberClass}`}>
-                  #{idx + 1}
-                </div>
               </motion.a>
             );
           })}

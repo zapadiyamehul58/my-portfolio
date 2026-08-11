@@ -403,84 +403,12 @@
       "order": 1
     },
     {
-      "id": 2,
-      "title": "AI Summit Participation",
-      "link": "https://drive.google.com/file/d/1d3CI_d25zn5Pa5zncc79LskemoMUpeiQ/view?usp=sharing",
-      "icon": "Cpu",
-      "category": "Summit",
-      "order": 2
-    },
-    {
-      "id": 3,
-      "title": "Code Carnival Achiever",
-      "link": "https://drive.google.com/file/d/1IBrd5rJOVwsIl_iXQo7aLdHKEIOXHWEM/view?usp=sharing",
-      "icon": "Award",
-      "category": "Coding Hackathon",
-      "order": 3
-    },
-    {
       "id": 4,
       "title": "PPT Activity Winner",
       "link": "https://drive.google.com/file/d/15W9dShnBQxPYB8P21nPKeS1_F8O7uQro/view?usp=sharing",
       "icon": "Presentation",
       "category": "Presentation",
-      "order": 4
-    },
-    {
-      "id": 5,
-      "title": "Sanskriti Youth Festival",
-      "link": "https://drive.google.com/file/d/1FyHKSmIdIP9SXLCbwuxPSvDfYTAuVgOl/view?usp=sharing",
-      "icon": "GraduationCap",
-      "category": "Academic Cultural",
-      "order": 5
-    },
-    {
-      "id": 6,
-      "title": "Avasar Coding Contest",
-      "link": "https://drive.google.com/file/d/1VL7gxIeoBHIHRKWSBbl-jF8fASUE9-A9/view?usp=sharing",
-      "icon": "Award",
-      "category": "Competition",
-      "order": 6
-    },
-    {
-      "id": 7,
-      "title": "Kali Linux Cybersecurity training",
-      "link": "https://drive.google.com/file/d/1XmhFj5wQNhUNHCoCGRSBiXMhPan7B6W3/view?usp=sharing",
-      "icon": "Shield",
-      "category": "Security Training",
-      "order": 7
-    },
-    {
-      "id": 8,
-      "title": "OOP Java Certification",
-      "link": "https://drive.google.com/file/d/1N-uLII0jdTxJLlev5jyaLPNAXKjntSLj/view?usp=sharing",
-      "icon": "Code",
-      "category": "Certification",
-      "order": 8
-    },
-    {
-      "id": 9,
-      "title": "Google Blogging & SEO training",
-      "link": "https://drive.google.com/file/d/1ZsgJ_XiIKfJvuBEGPrG7GRmn1DanehFJ/view?usp=sharing",
-      "icon": "FileText",
-      "category": "SEO Certification",
-      "order": 9
-    },
-    {
-      "id": 10,
-      "title": "Google Chat Developers session",
-      "link": "https://drive.google.com/file/d/1cblhcjLafoiZP2k1lBCfv5qnneHI8RX7/view?usp=sharing",
-      "icon": "MessageSquare",
-      "category": "Development",
-      "order": 10
-    },
-    {
-      "id": 11,
-      "title": "Aufest Event Decoration Lead",
-      "link": "https://drive.google.com/file/d/1fGFy9N2EiTOsmb17debeDFYrZEF-f5Jf/view?usp=sharing",
-      "icon": "Sparkles",
-      "category": "Leadership Award",
-      "order": 11
+      "order": 2
     },
     {
       "id": 12,
@@ -488,6 +416,78 @@
       "link": "https://docs.google.com/presentation/d/1ZCKifG5vlgweN7BltvrrGIA6Dc_lt5MEFfoyLF70EYc/edit?usp=sharing",
       "icon": "Award",
       "category": "Hackathon",
+      "order": 3
+    },
+    {
+      "id": 2,
+      "title": "AI Summit Participation",
+      "link": "https://drive.google.com/file/d/1d3CI_d25zn5Pa5zncc79LskemoMUpeiQ/view?usp=sharing",
+      "icon": "Cpu",
+      "category": "Summit",
+      "order": 4
+    },
+    {
+      "id": 3,
+      "title": "Code Carnival Achiever",
+      "link": "https://drive.google.com/file/d/1IBrd5rJOVwsIl_iXQo7aLdHKEIOXHWEM/view?usp=sharing",
+      "icon": "Award",
+      "category": "Coding Hackathon",
+      "order": 5
+    },
+    {
+      "id": 5,
+      "title": "Sanskriti Youth Festival",
+      "link": "https://drive.google.com/file/d/1FyHKSmIdIP9SXLCbwuxPSvDfYTAuVgOl/view?usp=sharing",
+      "icon": "GraduationCap",
+      "category": "Academic Cultural",
+      "order": 6
+    },
+    {
+      "id": 6,
+      "title": "Avasar Coding Contest",
+      "link": "https://drive.google.com/file/d/1VL7gxIeoBHIHRKWSBbl-jF8fASUE9-A9/view?usp=sharing",
+      "icon": "Award",
+      "category": "Competition",
+      "order": 7
+    },
+    {
+      "id": 7,
+      "title": "Kali Linux Cybersecurity training",
+      "link": "https://drive.google.com/file/d/1XmhFj5wQNhUNHCoCGRSBiXMhPan7B6W3/view?usp=sharing",
+      "icon": "Shield",
+      "category": "Security Training",
+      "order": 8
+    },
+    {
+      "id": 8,
+      "title": "OOP Java Certification",
+      "link": "https://drive.google.com/file/d/1N-uLII0jdTxJLlev5jyaLPNAXKjntSLj/view?usp=sharing",
+      "icon": "Code",
+      "category": "Certification",
+      "order": 9
+    },
+    {
+      "id": 9,
+      "title": "Google Blogging & SEO training",
+      "link": "https://drive.google.com/file/d/1ZsgJ_XiIKfJvuBEGPrG7GRmn1DanehFJ/view?usp=sharing",
+      "icon": "FileText",
+      "category": "SEO Certification",
+      "order": 10
+    },
+    {
+      "id": 10,
+      "title": "Google Chat Developers session",
+      "link": "https://drive.google.com/file/d/1cblhcjLafoiZP2k1lBCfv5qnneHI8RX7/view?usp=sharing",
+      "icon": "MessageSquare",
+      "category": "Development",
+      "order": 11
+    },
+    {
+      "id": 11,
+      "title": "Aufest Event Decoration Lead",
+      "link": "https://drive.google.com/file/d/1fGFy9N2EiTOsmb17debeDFYrZEF-f5Jf/view?usp=sharing",
+      "icon": "Sparkles",
+      "category": "Leadership Award",
       "order": 12
     }
   ],
