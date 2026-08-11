@@ -12,7 +12,7 @@
     "about_paragraphs": [
       "I'm a BCA student at Atmiya University, Rajkot with a strong passion for building intelligent, real-world applications using Python, AI/ML, and modern web technologies.",
       "Over the past 2+ years, I've developed multiple full-stack projects — from high-speed file sharing platforms to AI-powered image generators and prompt extraction tools. I actively participate in hackathons, earning certificates from national-level coding competitions and AI summits.",
-      "My toolkit includes React, TypeScript, Python, Pandas, TensorFlow, and Scikit-learn. I'm driven by curiosity and always exploring the intersection of data science, AI automation, and creative web experiences."
+      "My toolkit includes React,  Basic TypeScript, Python, Pandas,and Scikit-learn. I'm driven by curiosity and always exploring the intersection of data science, AI automation, and creative web experiences."
     ],
     "stats": [
       {
@@ -43,13 +43,6 @@
     "instagram_url": ""
   },
   "skills": [
-    {
-      "id": 1,
-      "name": "Python",
-      "category": "Language",
-      "show_in_hero": true,
-      "order": 1
-    },
     {
       "id": 2,
       "name": "SQL",
@@ -294,6 +287,13 @@
       "category": "Tools",
       "show_in_hero": false,
       "order": 36
+    },
+    {
+      "name": "Python",
+      "category": "Language",
+      "show_in_hero": true,
+      "order": 36,
+      "id": 37
     }
   ],
   "projects": [
@@ -342,7 +342,7 @@
         "HTML/CSS",
         "SQLite"
       ],
-      "featured": true,
+      "featured": false,
       "order": 3
     },
     {
@@ -374,7 +374,7 @@
         "Scikit-Learn",
         "Pandas"
       ],
-      "featured": true,
+      "featured": false,
       "order": 5
     },
     {
@@ -559,5 +559,18 @@
     "email": "zapadiyamehul58@gmail.com",
     "passwordHash": "91b63c2d918f2c8cca4f9014329ea7bada27458f87b61c6993aa83dd87e3161fa9d7dc47e67e45dad2edb1dd9c9c28a3626765ce20a43a690cadafebaff89579",
     "salt": "5d09dcfa4606212539254d54aa9a370f"
-  }
+  },
+  "blogs": [
+    {
+      "id": 1,
+      "title": "How I Built the Prompt Extractor using Streamlit and Gemini",
+      "slug": "how-i-built-prompt-extractor",
+      "category": "Artificial Intelligence",
+      "content": "In this article, I will explain the architecture behind the Prompt Extractor and how it leverages the power of the Gemini API to systematically organize inputs...",
+      "excerpt": "Learn how the Prompt Extractor works and why Streamlit is amazing for fast AI prototyping.",
+      "author": "Mehul Zapadiya",
+      "created_at": "2026-08-11T05:22:52.518Z",
+      "published": true
+    }
+  ]
 }
