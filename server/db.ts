@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
-import { Profile, Skill, Project, Achievement, Education, Message } from "../src/types.js";
+import { Profile, Skill, Project, Achievement, Education, Message, Blog } from "../src/types.js";
 
 const DB_FILE = path.join(process.cwd(), "data", "db.json");
 
