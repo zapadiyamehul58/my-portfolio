@@ -59,6 +59,11 @@ export interface Education {
 export interface MessageReply {
   body: string;
   created_at: string;
+  emailStatus?: "PENDING" | "SENT" | "FAILED";
+  providerMessageId?: string;
+  emailError?: string;
+  sentAt?: string;
+  failedAt?: string;
 }
 
 export interface Message {

@@ -118,10 +118,10 @@ export const api = {
 
   getDashboardStats: () => request<DashboardStats>("/dashboard/stats"),
 
-  sendReply: (messageId: number, body: string) =>
-    request<{ message: string }>("/messages/send-reply", {
+  sendReply: (messageId: number, body: string, replyIndex?: number, clientReplyId?: string) =>
+    request<{ message: string; data?: Message; emailId?: string }>("/messages/send-reply", {
       method: "POST",
-      body: JSON.stringify({ messageId, body })
+      body: JSON.stringify({ messageId, body, replyIndex, clientReplyId })
     }),
 
   // Profile Updates

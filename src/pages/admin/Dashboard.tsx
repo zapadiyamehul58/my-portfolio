@@ -1,4 +1,4 @@
-import { useState, useEffect, FormEvent, ChangeEvent, Fragment, ComponentType } from "react";
+import { useState, useEffect, useRef, FormEvent, ChangeEvent, Fragment, ComponentType } from "react";
 import {
   LayoutDashboard,
   User,
@@ -27,7 +27,12 @@ import {
   MessageSquare,
   Sparkles,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Bell,
+  BellRing,
+  Volume2,
+  VolumeX,
+  RefreshCw
 } from "lucide-react";
 import AnimatedBackground from "../../components/AnimatedBackground.js";
 
@@ -85,6 +90,20 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     text: ""
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSendingReply, setIsSendingReply] = useState(false);
+  const [retryingReplyIndex, setRetryingReplyIndex] = useState<number | null>(null);
+
+  // Notification center & Alert states (Steps 15, 16, 17, 18, 19)
+  const [notificationOpen, setNotificationOpen] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
+    return localStorage.getItem("admin_sound_enabled") !== "false";
+  });
+  const [desktopAlertsEnabled, setDesktopAlertsEnabled] = useState<boolean>(() => {
+    return localStorage.getItem("admin_desktop_alerts") === "true" && typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted";
+  });
+
+  const initialLoadDoneRef = useRef(false);
+  const seenMessageIdsRef = useRef<Set<number>>(new Set());
 
   // Modal / Editing states
   const [editingSkill, setEditingSkill] = useState<Partial<Skill> | null>(null);
@@ -95,9 +114,94 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   // Security settings state
   const [passwordForm, setPasswordForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
 
+  // Web Audio Synthesizer Chime (Zero external audio file dependencies)
+  const playNotificationSound = () => {
+    if (!soundEnabled) return;
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const now = ctx.currentTime;
+      
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(587.33, now); // D5 tone
+      osc.frequency.exponentialRampToValueAtTime(880, now + 0.12); // A5 harmonic
+      gain.gain.setValueAtTime(0.12, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+      
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      
+      osc.start(now);
+      osc.stop(now + 0.35);
+    } catch (e) {
+      console.warn("Notification audio error:", e);
+    }
+  };
+
+  // Browser desktop notification trigger
+  const triggerDesktopNotification = (senderName: string, snippet: string) => {
+    if (desktopAlertsEnabled && typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+      try {
+        new Notification("New Portfolio Message", {
+          body: `${senderName}: ${snippet.slice(0, 80)}`,
+          icon: "/favicon.png"
+        });
+      } catch (err) {
+        console.warn("Failed to trigger desktop notification:", err);
+      }
+    }
+  };
+
+  const toggleSound = () => {
+    setSoundEnabled((prev) => {
+      const next = !prev;
+      localStorage.setItem("admin_sound_enabled", String(next));
+      if (next) playNotificationSound();
+      return next;
+    });
+  };
+
+  const toggleDesktopAlerts = async () => {
+    if (typeof window === "undefined" || !("Notification" in window)) {
+      alert("Your browser does not support desktop notifications.");
+      return;
+    }
+
+    if (Notification.permission === "granted") {
+      const next = !desktopAlertsEnabled;
+      setDesktopAlertsEnabled(next);
+      localStorage.setItem("admin_desktop_alerts", String(next));
+      triggerStatus("success", next ? "Desktop notifications enabled." : "Desktop notifications disabled.");
+    } else if (Notification.permission !== "denied") {
+      const perm = await Notification.requestPermission();
+      if (perm === "granted") {
+        setDesktopAlertsEnabled(true);
+        localStorage.setItem("admin_desktop_alerts", "true");
+        triggerStatus("success", "Desktop notifications enabled.");
+      } else {
+        setDesktopAlertsEnabled(false);
+        localStorage.setItem("admin_desktop_alerts", "false");
+        triggerStatus("error", "Permission for desktop notifications was denied.");
+      }
+    } else {
+      alert("Notification permissions have been blocked in your browser settings. Please enable them in your browser site settings.");
+    }
+  };
+
+  const handleMarkAllMessagesRead = async () => {
+    const unreadMsgs = messages.filter(m => !m.read);
+    if (unreadMsgs.length === 0) return;
+    await Promise.all(unreadMsgs.map(m => api.markMessageRead(m.id, true)));
+    loadAllData();
+    triggerStatus("success", "All messages marked as read.");
+  };
+
   // Load all initial data on mount
-  const loadAllData = async () => {
-    setIsLoading(true);
+  const loadAllData = async (silent = false) => {
+    if (!silent) setIsLoading(true);
     const res = await api.getPortfolio();
     if (res.success && res.data) {
       setProfile(res.data.profile);
@@ -115,13 +219,58 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     const messagesRes = await api.getMessages();
     if (messagesRes.success && messagesRes.data) {
       setMessages(messagesRes.data);
+      seenMessageIdsRef.current = new Set(messagesRes.data.map(m => m.id));
     }
-    setIsLoading(false);
+    if (!silent) setIsLoading(false);
   };
 
   useEffect(() => {
     loadAllData();
   }, []);
+
+  // Real-time polling for messages & new submissions (Step 16)
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      // If tab is hidden in background, avoid redundant polling
+      if (document.hidden) return;
+
+      try {
+        const messagesRes = await api.getMessages();
+        if (messagesRes.success && messagesRes.data) {
+          const freshMessages = messagesRes.data;
+          
+          if (initialLoadDoneRef.current) {
+            // Find newly arrived messages that weren't in seenMessageIdsRef
+            const newUnreadMessages = freshMessages.filter(
+              (m) => !seenMessageIdsRef.current.has(m.id) && !m.read
+            );
+
+            if (newUnreadMessages.length > 0) {
+              const latestNew = newUnreadMessages[0];
+              triggerStatus("success", `🔔 New Message from ${latestNew.name}: "${latestNew.message.slice(0, 45)}..."`);
+              playNotificationSound();
+              triggerDesktopNotification(latestNew.name, latestNew.message);
+            }
+          } else {
+            initialLoadDoneRef.current = true;
+          }
+
+          seenMessageIdsRef.current = new Set(freshMessages.map((m) => m.id));
+          setMessages(freshMessages);
+
+          // Also update dashboard stats
+          const statsRes = await api.getDashboardStats();
+          if (statsRes.success && statsRes.data) {
+            setStats(statsRes.data);
+          }
+        }
+      } catch (err) {
+        console.warn("Polling error:", err);
+      }
+    }, 15000);
+
+    return () => clearInterval(interval);
+  }, [soundEnabled, desktopAlertsEnabled]);
 
   const triggerStatus = (type: "success" | "error", text: string) => {
     setSaveStatus({ type, text });
@@ -352,6 +501,8 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     );
   }
 
+  const unreadCount = messages.filter(m => !m.read).length;
+
   const sidebarItems = [
     { id: "overview", name: "Dashboard Overview", icon: LayoutDashboard },
     { id: "profile", name: "Profile & Hero", icon: User },
@@ -359,7 +510,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
     { id: "projects", name: "Project Portfolio", icon: Cpu },
     { id: "achievements", name: "Achievements & Certs", icon: Trophy },
     { id: "education", name: "Education Journey", icon: GraduationCap },
-    { id: "messages", name: `Inbox Submissions (${messages.filter(m => !m.read).length})`, icon: Mail },
+    { id: "messages", name: `Inbox Submissions (${unreadCount})`, icon: Mail },
     { id: "security", name: "Password Security", icon: Settings }
   ];
 
@@ -378,6 +529,14 @@ export default function Dashboard({ onLogout }: DashboardProps) {
           <AlertCircle className="h-4 w-4" />
           <span>{saveStatus.text}</span>
         </div>
+      )}
+
+      {/* Backdrop for open notification modal */}
+      {notificationOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/20"
+          onClick={() => setNotificationOpen(false)}
+        />
       )}
 
       {/* Sidebar navigation */}
@@ -443,6 +602,162 @@ export default function Dashboard({ onLogout }: DashboardProps) {
 
       {/* Main Workspace Frame */}
       <main className="flex-1 p-6 sm:p-10 overflow-y-auto max-w-5xl mx-auto w-full">
+        
+        {/* Top Header Bar with Live Telemetry and Notification Center (Step 19) */}
+        <div className="flex items-center justify-between pb-6 mb-8 border-b border-white/5 relative z-40">
+          <div className="flex items-center gap-3">
+            <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse block" />
+            <span className="text-xs font-mono text-slate-400 uppercase tracking-wider">
+              Console Active &middot; {activeTab.toUpperCase()}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-3 relative">
+            {/* Quick Refresh Button */}
+            <button
+              onClick={() => {
+                loadAllData(true);
+                triggerStatus("success", "Data synchronized.");
+              }}
+              title="Refresh workspace telemetry"
+              className="p-2 rounded-xl border border-white/5 bg-[#0f111a]/60 hover:bg-slate-800/50 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+            >
+              <RefreshCw className="h-4 w-4" />
+            </button>
+
+            {/* Quick Sound Toggle Button (Step 18) */}
+            <button
+              onClick={toggleSound}
+              title={soundEnabled ? "Notification sound: ON (Click to mute)" : "Notification sound: OFF (Click to unmute)"}
+              className={`p-2 rounded-xl border transition-colors cursor-pointer ${
+                soundEnabled
+                  ? "bg-slate-800/60 border-cyan-500/30 text-cyan-400 hover:text-cyan-300"
+                  : "bg-slate-900/40 border-white/5 text-slate-500 hover:text-slate-400"
+              }`}
+            >
+              {soundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+            </button>
+
+            {/* Notification Center Bell Icon (Step 19) */}
+            <div className="relative">
+              <button
+                onClick={() => setNotificationOpen(!notificationOpen)}
+                title="Notifications"
+                className={`p-2 rounded-xl border relative transition-all cursor-pointer ${
+                  notificationOpen
+                    ? "bg-indigo-500/20 border-indigo-500/40 text-indigo-300"
+                    : "bg-slate-800/60 border-white/10 text-slate-300 hover:text-white hover:bg-slate-800"
+                }`}
+              >
+                {unreadCount > 0 ? (
+                  <BellRing className="h-4 w-4 text-amber-400" />
+                ) : (
+                  <Bell className="h-4 w-4" />
+                )}
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.5 rounded-full bg-rose-500 text-[10px] font-bold text-white shadow-md">
+                    {unreadCount}
+                  </span>
+                )}
+              </button>
+
+              {/* Notification Center Dropdown Modal */}
+              {notificationOpen && (
+                <div className="absolute right-0 mt-3 w-80 sm:w-96 rounded-2xl bg-[#12141f] border border-white/10 shadow-2xl p-4 z-50 text-left backdrop-blur-xl">
+                  <div className="flex items-center justify-between pb-3 border-b border-white/5">
+                    <div className="flex items-center gap-2">
+                      <Bell className="h-4 w-4 text-indigo-400" />
+                      <span className="font-display font-bold text-sm text-white">Notifications</span>
+                      {unreadCount > 0 && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400 font-mono font-semibold">
+                          {unreadCount} unread
+                        </span>
+                      )}
+                    </div>
+                    {unreadCount > 0 && (
+                      <button
+                        onClick={handleMarkAllMessagesRead}
+                        className="text-[11px] font-mono text-indigo-400 hover:text-indigo-300 hover:underline cursor-pointer"
+                      >
+                        Mark all read
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Settings quick toggles (Steps 17, 18) */}
+                  <div className="py-2.5 px-1 border-b border-white/5 grid grid-cols-2 gap-2 text-[11px] font-mono text-slate-400">
+                    <button
+                      onClick={toggleSound}
+                      className={`flex items-center justify-center gap-1.5 p-1.5 rounded-lg border transition-colors cursor-pointer ${
+                        soundEnabled ? "border-cyan-500/30 text-cyan-400 bg-cyan-500/10" : "border-white/5 text-slate-500 hover:bg-white/5"
+                      }`}
+                    >
+                      {soundEnabled ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
+                      <span>Sound: {soundEnabled ? "ON" : "OFF"}</span>
+                    </button>
+                    <button
+                      onClick={toggleDesktopAlerts}
+                      className={`flex items-center justify-center gap-1.5 p-1.5 rounded-lg border transition-colors cursor-pointer ${
+                        desktopAlertsEnabled ? "border-indigo-500/30 text-indigo-400 bg-indigo-500/10" : "border-white/5 text-slate-500 hover:bg-white/5"
+                      }`}
+                    >
+                      <Bell className="h-3.5 w-3.5" />
+                      <span>Desktop: {desktopAlertsEnabled ? "ON" : "OFF"}</span>
+                    </button>
+                  </div>
+
+                  {/* Message list */}
+                  <div className="max-h-72 overflow-y-auto divide-y divide-white/5 mt-2">
+                    {messages.slice(0, 6).map((msg) => (
+                      <div
+                        key={msg.id}
+                        onClick={() => {
+                          setActiveTab("messages");
+                          setExpandedMessageId(msg.id);
+                          if (!msg.read) handleMessageMarkRead(msg.id, true);
+                          setNotificationOpen(false);
+                        }}
+                        className={`p-2.5 rounded-xl hover:bg-white/5 transition-colors cursor-pointer flex items-start gap-2.5 ${
+                          !msg.read ? "bg-indigo-500/10" : ""
+                        }`}
+                      >
+                        <span className={`h-2 w-2 rounded-full mt-1.5 flex-shrink-0 ${!msg.read ? "bg-indigo-400" : "bg-transparent"}`} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <span className={`text-xs truncate ${!msg.read ? "font-bold text-white" : "font-medium text-slate-300"}`}>
+                              {msg.name}
+                            </span>
+                            <span className="text-[10px] text-slate-500 font-mono">
+                              {new Date(msg.created_at).toLocaleDateString([], { month: "short", day: "numeric" })}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-400 truncate mt-0.5">{msg.message}</p>
+                        </div>
+                      </div>
+                    ))}
+                    {messages.length === 0 && (
+                      <div className="py-6 text-center text-xs text-slate-500 font-mono">
+                        No messages received yet.
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="pt-2.5 border-t border-white/5 mt-2 text-center">
+                    <button
+                      onClick={() => {
+                        setActiveTab("messages");
+                        setNotificationOpen(false);
+                      }}
+                      className="text-xs text-indigo-400 hover:text-indigo-300 font-medium cursor-pointer"
+                    >
+                      View all inbox messages &rarr;
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
         
         {/* TAB 1: OVERVIEW */}
         {activeTab === "overview" && (
@@ -1608,11 +1923,68 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                                     <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-500 block">Conversation History</span>
                                     {msg.replies.map((reply, idx) => (
                                       <div key={idx} className="p-4 rounded-xl bg-indigo-500/10 border border-indigo-500/20 ml-8">
-                                        <div className="flex justify-between items-center mb-2">
-                                          <span className="text-xs font-semibold text-indigo-300">You (Admin)</span>
+                                        <div className="flex justify-between items-start mb-2">
+                                          <div>
+                                            <span className="text-xs font-semibold text-indigo-300 block mb-1">You (Admin)</span>
+                                            {reply.emailStatus && (
+                                              <div className="flex items-center gap-2">
+                                                <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${reply.emailStatus === 'SENT' ? 'bg-emerald-500/20 text-emerald-400' : reply.emailStatus === 'FAILED' ? 'bg-red-500/20 text-red-400' : 'bg-amber-500/20 text-amber-400'}`}>
+                                                  Email Status: {reply.emailStatus}
+                                                </span>
+                                                {reply.providerMessageId && (
+                                                  <span className="text-[9px] text-slate-500 font-mono" title="Provider Message ID">
+                                                    ID: {reply.providerMessageId}
+                                                  </span>
+                                                )}
+                                              </div>
+                                            )}
+                                          </div>
                                           <span className="text-[10px] font-mono text-slate-500">{new Date(reply.created_at).toLocaleString()}</span>
                                         </div>
                                         <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap">{reply.body}</p>
+                                        
+                                        {reply.emailStatus === 'FAILED' && (
+                                          <div className="mt-3 pt-3 border-t border-red-500/20 flex flex-col gap-2">
+                                            <span className="text-xs text-red-400">Delivery Error: {reply.emailError || "Email delivery failed."}</span>
+                                            <button
+                                              onClick={async () => {
+                                                if (retryingReplyIndex !== null) return;
+                                                setRetryingReplyIndex(idx);
+                                                const clientReplyId = `retry_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+                                                try {
+                                                  const res = await api.sendReply(msg.id, reply.body, idx, clientReplyId);
+                                                  if (res.success) {
+                                                    triggerStatus("success", `✓ Reply delivered successfully on retry to ${msg.email}`);
+                                                    loadAllData(true);
+                                                  } else {
+                                                    triggerStatus("error", `✕ Retry failed.\n\n${res.error || "Email delivery failed."}`);
+                                                    loadAllData(true);
+                                                  }
+                                                } catch (error: any) {
+                                                  console.error("Failed to retry:", error);
+                                                  triggerStatus("error", `✕ Retry error: ${error.message || error}`);
+                                                  loadAllData(true);
+                                                } finally {
+                                                  setRetryingReplyIndex(null);
+                                                }
+                                              }}
+                                              disabled={retryingReplyIndex === idx}
+                                              className="self-start px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-xs font-semibold text-red-400 border border-red-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 cursor-pointer"
+                                            >
+                                              {retryingReplyIndex === idx ? (
+                                                <>
+                                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                                  <span>Retrying...</span>
+                                                </>
+                                              ) : (
+                                                <>
+                                                  <RefreshCw className="h-3 w-3" />
+                                                  <span>Retry Sending</span>
+                                                </>
+                                              )}
+                                            </button>
+                                          </div>
+                                        )}
                                       </div>
                                     ))}
                                   </div>
@@ -1630,35 +2002,51 @@ export default function Dashboard({ onLogout }: DashboardProps) {
                                     className="w-full px-4 py-3 rounded-xl bg-[#151822]/80 backdrop-blur border border-white/5 focus:border-indigo-500/60 focus:outline-none text-slate-200 placeholder-slate-600 text-sm font-sans transition-colors resize-none"
                                   />
                                   <div className="flex flex-wrap items-center gap-3">
-                                    <button
-                                        onClick={async () => {
-                                          setIsSubmitting(true);
-                                          try {
-                                            const res = await api.sendReply(
-                                              msg.id,
-                                              replyText || `Hi ${msg.name},\n\n`
-                                            );
-                                            
-                                            if (res.success) {
-                                              triggerStatus("success", "Reply sent and saved successfully!");
-                                              setReplyText("");
-                                              loadAllData();
-                                            } else {
-                                              triggerStatus("error", res.error || "Failed to send message.");
+                                      <button
+                                          onClick={async () => {
+                                            const text = replyText.trim();
+                                            if (!text) {
+                                              alert("Please write a reply first.");
+                                              return;
                                             }
-                                          } catch (error: any) {
-                                            console.error("Failed to send:", error);
-                                            triggerStatus("error", `Error: ${error.message || error}`);
-                                          } finally {
-                                            setIsSubmitting(false);
-                                          }
-                                        }}
-                                      disabled={isSubmitting}
-                                      className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white inline-flex items-center gap-1.5 shadow-lg shadow-indigo-600/10 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                      <Mail className="h-3.5 w-3.5" />
-                                      <span>{isSubmitting ? "Sending..." : "Send"}</span>
-                                    </button>
+                                            if (isSendingReply) return;
+                                            setIsSendingReply(true);
+                                            const clientReplyId = `reply_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+                                            try {
+                                              const res = await api.sendReply(msg.id, text, undefined, clientReplyId);
+                                              
+                                              if (res.success) {
+                                                triggerStatus("success", `✓ Reply delivered successfully to ${msg.email}`);
+                                                setReplyText("");
+                                                loadAllData(true);
+                                              } else {
+                                                triggerStatus("error", `✕ Email delivery failed.\n\n${res.error || "Email delivery failed."}`);
+                                                // Keep replyText in textarea so the admin doesn't lose what they typed
+                                                loadAllData(true);
+                                              }
+                                            } catch (error: any) {
+                                              console.error("Failed to send:", error);
+                                              triggerStatus("error", `✕ Email delivery failed: ${error.message || error}`);
+                                              loadAllData(true);
+                                            } finally {
+                                              setIsSendingReply(false);
+                                            }
+                                          }}
+                                        disabled={isSendingReply}
+                                        className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white inline-flex items-center gap-1.5 shadow-lg shadow-indigo-600/10 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                                      >
+                                        {isSendingReply ? (
+                                          <>
+                                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                            <span>Sending...</span>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <Mail className="h-3.5 w-3.5" />
+                                            <span>Send Reply</span>
+                                          </>
+                                        )}
+                                      </button>
                                     {msg.phone && (
                                       <a
                                         href={`https://wa.me/${cleanPhone}?text=${encodeURIComponent(replyText || `Hi ${msg.name}, `)}`}

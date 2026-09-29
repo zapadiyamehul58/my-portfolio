@@ -1,3 +1,4 @@
+import "dotenv/config";
 import express from "express";
 import path from "path";
 import fs from "fs";
@@ -7,35 +8,124 @@ import { Resend } from "resend";
 import rateLimit from "express-rate-limit";
 import xss from "xss";
 import { db, hashPassword } from "./server/db.js";
+import { Message } from "./src/types.js";
 
 const app = express();
 const PORT = 8000;
 const JWT_SECRET = process.env.JWT_SECRET || "mehul_zapadiya_portfolio_jwt_secret_2026_super_secure";
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.ADMIN_EMAIL || "zapadiyamehul58@gmail.com",
-    pass: process.env.GMAIL_APP_PASSWORD || "",
-  }
-});
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "zapadiyamehul58@gmail.com";
-const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
-async function sendMailHelper(options: { from: string, to: string, replyTo?: string, subject: string, text: string, html?: string }) {
-  if (resend) {
-    await resend.emails.send({
-      from: "Mehul Zapadiya <onboarding@resend.dev>", // Change this to your verified domain (e.g. admin@yourdomain.com) when ready
-      to: [options.to],
-      reply_to: options.replyTo,
-      subject: options.subject,
-      text: options.text,
-      html: options.html
+function getResendClient(): Resend | null {
+  const key = process.env.RESEND_API_KEY?.trim();
+  return key ? new Resend(key) : null;
+}
+
+function getSmtpTransporter() {
+  const user = process.env.SMTP_USER || process.env.ADMIN_EMAIL || "zapadiyamehul58@gmail.com";
+  const pass = process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD;
+  if (!pass) return null;
+
+  if (process.env.SMTP_HOST) {
+    return nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: Number(process.env.SMTP_PORT) || 587,
+      secure: Number(process.env.SMTP_PORT) === 465,
+      auth: { user, pass }
     });
-  } else if (process.env.GMAIL_APP_PASSWORD) {
-    await transporter.sendMail(options);
-  } else {
-    console.log(`\n=== MOCK EMAIL SENT ===\nTo: ${options.to}\nSubject: ${options.subject}\nBody: ${options.text}\n==================\n`);
   }
+
+  return nodemailer.createTransport({
+    service: "gmail",
+    auth: { user, pass }
+  });
+}
+
+// In-memory cache to prevent duplicate email sends on double-clicks or rapid retries
+const recentRepliesCache = new Map<string, number>();
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, ts] of recentRepliesCache.entries()) {
+    if (now - ts > 60000) {
+      recentRepliesCache.delete(key);
+    }
+  }
+}, 5 * 60 * 1000);
+
+export async function sendUnifiedEmail(options: {
+  to: string;
+  subject: string;
+  text: string;
+  html?: string;
+  replyTo?: string;
+  fromName?: string;
+}): Promise<{ success: boolean; provider: "resend" | "smtp"; messageId: string }> {
+  const resend = getResendClient();
+  const rawFrom = process.env.MAIL_FROM?.trim() || "Mehul Zapadiya <onboarding@resend.dev>";
+  const fromName = options.fromName || "Mehul Zapadiya";
+  const replyTo = options.replyTo || ADMIN_EMAIL;
+
+  let resendErrorMessage = "";
+
+  if (resend) {
+    try {
+      const result = await resend.emails.send({
+        from: rawFrom,
+        to: [options.to],
+        reply_to: replyTo,
+        subject: options.subject,
+        text: options.text,
+        html: options.html,
+      });
+
+      if (!result.error && result.data?.id) {
+        console.log(`[Resend Success] To: ${options.to}, Subject: "${options.subject}", ID: ${result.data.id}`);
+        return {
+          success: true,
+          provider: "resend",
+          messageId: result.data.id,
+        };
+      }
+
+      resendErrorMessage = result.error?.message || "Resend failed to accept email";
+      console.warn(`[Resend Warning] To: ${options.to}, Error: ${resendErrorMessage}`);
+    } catch (err: any) {
+      resendErrorMessage = err.message || String(err);
+      console.warn(`[Resend Exception] To: ${options.to}, Error: ${resendErrorMessage}`);
+    }
+  }
+
+  // Attempt SMTP fallback if configured
+  const smtp = getSmtpTransporter();
+  if (smtp) {
+    try {
+      const smtpUser = process.env.SMTP_USER || ADMIN_EMAIL;
+      const smtpFrom = `"${fromName}" <${smtpUser}>`;
+      const info = await smtp.sendMail({
+        from: smtpFrom,
+        to: options.to,
+        replyTo: replyTo,
+        subject: options.subject,
+        text: options.text,
+        html: options.html,
+      });
+
+      console.log(`[SMTP Success] To: ${options.to}, Subject: "${options.subject}", ID: ${info.messageId}`);
+      return {
+        success: true,
+        provider: "smtp",
+        messageId: info.messageId,
+      };
+    } catch (smtpErr: any) {
+      console.error(`[SMTP Error] To: ${options.to}, Error:`, smtpErr);
+      throw new Error(`Email delivery failed (SMTP: ${smtpErr.message || smtpErr}${resendErrorMessage ? `, Resend: ${resendErrorMessage}` : ''})`);
+    }
+  }
+
+  if (resendErrorMessage) {
+    throw new Error(resendErrorMessage);
+  }
+
+  throw new Error("No server email provider configured. Please configure RESEND_API_KEY (with verified domain in MAIL_FROM) or GMAIL_APP_PASSWORD.");
 }
 
 const messageRateLimiter = rateLimit({
@@ -205,11 +295,11 @@ app.post("/api/messages", messageRateLimiter, async (req, res) => {
       return res.status(400).json({ success: false, error: "Missing required fields (name, email, message)" });
     }
 
-    const sanitizedName = xss(name);
-    const sanitizedEmail = xss(email);
-    const sanitizedPhone = phone ? xss(phone) : "";
-    const sanitizedSubject = subject ? xss(subject) : "";
-    const sanitizedMessage = xss(message);
+    const sanitizedName = xss(name.trim());
+    const sanitizedEmail = xss(email.trim());
+    const sanitizedPhone = phone ? xss(phone.trim()) : "";
+    const sanitizedSubject = subject ? xss(subject.trim()) : "";
+    const sanitizedMessage = xss(message.trim());
 
     const newMessage = db.createMessage({ 
       name: sanitizedName, 
@@ -219,27 +309,113 @@ app.post("/api/messages", messageRateLimiter, async (req, res) => {
       message: sanitizedMessage 
     });
 
-    // Send emails in the background to not block the request
+    const appUrl = (process.env.APP_URL || "https://mehul-zapadiya.vercel.app").replace(/\/$/, "");
+
+    // Send emails in background so contact submission returns fast to the visitor
     (async () => {
+      // 1. Notification email to Mehul (Admin)
       try {
-        // Notification to admin
-        await sendMailHelper({
-          from: ADMIN_EMAIL,
+        const adminEmailSubject = `New Portfolio Contact Message — ${sanitizedName}`;
+        const adminEmailText = `New Portfolio Contact Message\n\n` +
+          `Visitor Name: ${sanitizedName}\n` +
+          `Visitor Email: ${sanitizedEmail}\n` +
+          `${sanitizedPhone ? `Phone: ${sanitizedPhone}\n` : ""}` +
+          `${sanitizedSubject ? `Subject: ${sanitizedSubject}\n` : ""}` +
+          `Date & Time: ${new Date().toLocaleString()}\n\n` +
+          `Message:\n${sanitizedMessage}\n\n` +
+          `Open Admin Inbox:\n${appUrl}/admin`;
+
+        const adminEmailHtml = `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width,initial-scale=1.0">
+          </head>
+          <body style="margin:0;padding:0;background:#080812;font-family:Arial,Helvetica,sans-serif;color:#ffffff;">
+            <div style="max-width:650px;margin:30px auto;background:#11111f;border:1px solid #29294a;border-radius:16px;overflow:hidden;">
+              <div style="padding:24px 28px;background:linear-gradient(135deg,#1f1a3a,#11111f);border-bottom:1px solid #29294a;">
+                <span style="display:inline-block;padding:4px 10px;background:#4f46e5;color:#ffffff;font-size:11px;font-weight:bold;border-radius:6px;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">New Submission</span>
+                <h1 style="margin:0;font-size:22px;color:#ffffff;">New Contact Message — ${escapeHtml(sanitizedName)}</h1>
+              </div>
+              <div style="padding:28px;">
+                <table style="width:100%;border-collapse:collapse;margin-bottom:20px;font-size:14px;color:#e9e9f5;">
+                  <tr><td style="padding:8px 0;color:#8f8fa8;width:130px;"><strong>Visitor Name:</strong></td><td style="padding:8px 0;color:#ffffff;font-weight:600;">${escapeHtml(sanitizedName)}</td></tr>
+                  <tr><td style="padding:8px 0;color:#8f8fa8;"><strong>Visitor Email:</strong></td><td style="padding:8px 0;"><a href="mailto:${escapeHtml(sanitizedEmail)}" style="color:#60a5fa;text-decoration:none;">${escapeHtml(sanitizedEmail)}</a></td></tr>
+                  ${sanitizedPhone ? `<tr><td style="padding:8px 0;color:#8f8fa8;"><strong>Phone:</strong></td><td style="padding:8px 0;color:#34d399;">${escapeHtml(sanitizedPhone)}</td></tr>` : ''}
+                  ${sanitizedSubject ? `<tr><td style="padding:8px 0;color:#8f8fa8;"><strong>Subject:</strong></td><td style="padding:8px 0;color:#ffffff;">${escapeHtml(sanitizedSubject)}</td></tr>` : ''}
+                  <tr><td style="padding:8px 0;color:#8f8fa8;"><strong>Date & Time:</strong></td><td style="padding:8px 0;color:#a5a5c0;">${new Date().toLocaleString()}</td></tr>
+                </table>
+                <div style="margin-bottom:24px;">
+                  <span style="font-size:12px;font-weight:bold;color:#8f8fa8;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:8px;">Message Content:</span>
+                  <div style="padding:18px;background:#19192b;border:1px solid #303052;border-radius:10px;color:#ffffff;font-size:14px;line-height:1.7;white-space:pre-wrap;">${escapeHtml(sanitizedMessage)}</div>
+                </div>
+                <div style="margin-top:20px;">
+                  <a href="${appUrl}/admin" style="display:inline-block;padding:12px 24px;border-radius:8px;background:#4f46e5;color:#ffffff;text-decoration:none;font-size:14px;font-weight:bold;">Open Admin Inbox</a>
+                </div>
+              </div>
+            </div>
+          </body>
+          </html>
+        `;
+
+        await sendUnifiedEmail({
           to: ADMIN_EMAIL,
           replyTo: sanitizedEmail,
-          subject: `New Contact Message from ${sanitizedName}`,
-          text: `Name: ${sanitizedName}\nEmail: ${sanitizedEmail}\nPhone: ${sanitizedPhone}\nSubject: ${sanitizedSubject}\n\nMessage:\n${sanitizedMessage}`
+          subject: adminEmailSubject,
+          text: adminEmailText,
+          html: adminEmailHtml,
         });
-        
-        // Confirmation to visitor
-        await sendMailHelper({
-          from: ADMIN_EMAIL,
+      } catch (err: any) {
+        console.error("[Contact Form] Failed to send admin notification email:", err.message || err);
+      }
+
+      // 2. Auto-confirmation email to visitor
+      try {
+        const visitorSubject = "Thank you for contacting Mehul Zapadiya";
+        const visitorText = `Hello ${sanitizedName},\n\nThank you for contacting Mehul Zapadiya.\n\nYour message has been successfully received.\n\nI will review your message and get back to you as soon as possible.\n\nRegards,\n\nMehul Zapadiya\nPython Developer | AI Engineer | Data Analytics Enthusiast | Full-Stack Web Developer\n\nPortfolio:\n${appUrl}`;
+        const visitorHtml = `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width,initial-scale=1.0">
+          </head>
+          <body style="margin:0;padding:0;background:#080812;font-family:Arial,Helvetica,sans-serif;color:#ffffff;">
+            <div style="max-width:650px;margin:30px auto;background:#11111f;border:1px solid #29294a;border-radius:16px;overflow:hidden;">
+              <div style="padding:24px 28px;background:linear-gradient(135deg,#17172d,#11111f);border-bottom:1px solid #29294a;">
+                <h1 style="margin:0;font-size:22px;color:#ffffff;">Mehul Zapadiya</h1>
+                <p style="margin:6px 0 0;color:#a5a5c0;font-size:13px;">Python Developer · AI Engineer · Data Analytics Enthusiast · Full-Stack Web Developer</p>
+              </div>
+              <div style="padding:28px;">
+                <p style="color:#ffffff;font-size:15px;margin-top:0;">Hello ${escapeHtml(sanitizedName)},</p>
+                <div style="margin:18px 0;padding:18px;background:#19192b;border:1px solid #303052;border-radius:10px;color:#e9e9f5;font-size:14px;line-height:1.7;">
+                  Thank you for contacting Mehul Zapadiya.<br><br>
+                  Your message has been successfully received. I will review your message and get back to you as soon as possible.
+                </div>
+                <p style="margin-top:24px;color:#ffffff;line-height:1.6;font-size:14px;">
+                  Regards,<br>
+                  <strong>Mehul Zapadiya</strong><br>
+                  <span style="color:#8f8fa8;font-size:13px;">Python Developer | AI Engineer | Data Analytics Enthusiast | Full-Stack Web Developer</span>
+                </p>
+                <div style="margin-top:20px;">
+                  <a href="${appUrl}" style="display:inline-block;padding:11px 22px;border-radius:8px;background:#5b4bff;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;">Visit Portfolio</a>
+                </div>
+              </div>
+            </div>
+          </body>
+          </html>
+        `;
+
+        await sendUnifiedEmail({
           to: sanitizedEmail,
-          subject: "Thank you for contacting me",
-          text: `Hi ${sanitizedName},\n\nThank you for reaching out. I have received your message and will get back to you soon.\n\nBest regards,\nMehul Zapadiya`
+          replyTo: ADMIN_EMAIL,
+          subject: visitorSubject,
+          text: visitorText,
+          html: visitorHtml,
         });
-      } catch (err) {
-        console.error("Email sending failed:", err);
+      } catch (err: any) {
+        console.warn("[Contact Form] Failed to send visitor confirmation email:", err.message || err);
       }
     })();
 
@@ -307,6 +483,94 @@ app.post("/api/auth/login", (req, res) => {
 });
 
 
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+export async function sendAdminReplyEmail({
+  visitorName,
+  visitorEmail,
+  originalSubject,
+  reply,
+}: {
+  visitorName: string;
+  visitorEmail: string;
+  originalSubject?: string;
+  reply: string;
+}): Promise<{ success: boolean; emailId: string; provider: string }> {
+  if (!visitorEmail || !visitorEmail.trim()) {
+    throw new Error("Visitor email is missing in the message record.");
+  }
+
+  const cleanSubject = originalSubject?.trim();
+  const subject = cleanSubject
+    ? (cleanSubject.toLowerCase().startsWith("re:") ? cleanSubject : `Re: ${cleanSubject}`)
+    : "Reply from Mehul Zapadiya";
+
+  const appUrl = (process.env.APP_URL || "https://mehul-zapadiya.vercel.app").replace(/\/$/, "");
+
+  const textBody =
+    `Hello ${visitorName},\n\n` +
+    `${reply}\n\n` +
+    `Thank you for contacting me. If you have any further questions, simply reply directly to this email.\n\n` +
+    `Regards,\n` +
+    `Mehul Zapadiya\n` +
+    `Python Developer | AI Engineer | Data Analytics Enthusiast | Full-Stack Web Developer\n\n` +
+    `Portfolio: ${appUrl}`;
+
+  const htmlBody = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    </head>
+    <body style="margin:0;padding:0;background:#080812;font-family:Arial,Helvetica,sans-serif;color:#ffffff;">
+      <div style="max-width:650px;margin:30px auto;background:#11111f;border:1px solid #29294a;border-radius:18px;overflow:hidden;">
+        <div style="padding:28px;background:linear-gradient(135deg,#17172d,#11111f);border-bottom:1px solid #29294a;">
+          <h1 style="margin:0;font-size:24px;color:#ffffff;">Mehul Zapadiya</h1>
+          <p style="margin:8px 0 0;color:#a5a5c0;font-size:13px;">Python Developer · AI Engineer · Data Analytics Enthusiast · Full-Stack Web Developer</p>
+        </div>
+        <div style="padding:32px;">
+          <p style="color:#ffffff;font-size:16px;margin-top:0;">Hello ${escapeHtml(visitorName)},</p>
+          <div style="margin:22px 0;padding:22px;background:#19192b;border:1px solid #303052;border-radius:12px;color:#e9e9f5;font-size:15px;line-height:1.7;white-space:pre-wrap;">${escapeHtml(reply)}</div>
+          <p style="color:#a5a5c0;line-height:1.6;font-size:14px;">
+            Thank you for contacting me. If you have any further questions, simply reply directly to this email.
+          </p>
+          <p style="margin-top:28px;color:#ffffff;line-height:1.6;font-size:14px;">
+            Regards,<br>
+            <strong>Mehul Zapadiya</strong><br>
+            <span style="color:#8f8fa8;font-size:13px;">Python Developer | AI Engineer | Data Analytics Enthusiast | Full-Stack Web Developer</span>
+          </p>
+          <div style="margin-top:20px;">
+            <a href="${appUrl}" style="display:inline-block;padding:12px 22px;border-radius:8px;background:#5b4bff;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;">Visit Portfolio</a>
+          </div>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  const result = await sendUnifiedEmail({
+    to: visitorEmail.trim(),
+    replyTo: ADMIN_EMAIL,
+    subject,
+    text: textBody,
+    html: htmlBody,
+  });
+
+  return {
+    success: true,
+    emailId: result.messageId,
+    provider: result.provider,
+  };
+}
+
 // ==================== ADMIN PROTECTED API ROUTES ====================
 
 // GET: Auth Me
@@ -314,40 +578,102 @@ app.get("/api/auth/me", authMiddleware, (req: any, res) => {
   res.json({ success: true, data: { email: req.user.email } });
 });
 
-// POST: Send a reply email in the background
+// POST: Send admin reply email to visitor
 app.post("/api/messages/send-reply", authMiddleware, async (req: any, res) => {
   try {
-    const { messageId, body } = req.body;
-    if (!messageId || !body) {
+    const { messageId, body, replyIndex, clientReplyId } = req.body;
+    if (!messageId || !body || !body.trim()) {
       return res.status(400).json({ success: false, error: "Missing required fields: messageId, body" });
     }
 
+    // Duplicate submission protection (idempotency)
+    const idempotencyKey = clientReplyId || `${messageId}:${body.trim()}`;
+    const lastSentTimestamp = recentRepliesCache.get(idempotencyKey);
+    if (lastSentTimestamp && Date.now() - lastSentTimestamp < 8000) {
+      return res.status(429).json({
+        success: false,
+        error: "A reply with the same content is already being sent. Please wait a moment."
+      });
+    }
+    recentRepliesCache.set(idempotencyKey, Date.now());
+
     const message = db.getMessage(Number(messageId));
     if (!message) {
-      return res.status(404).json({ success: false, error: "Message not found" });
+      return res.status(404).json({ success: false, error: "Message record not found in database." });
     }
-    
-    const htmlBody = `
-      <div style="font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif,'Apple Color Emoji','Segoe UI Emoji'; color: #24292f; max-width: 800px;">
-        <div style="padding: 16px 0; font-size: 14px; line-height: 1.5; white-space: pre-wrap;">${body}</div>
-        <hr style="border: none; border-top: 1px solid #d0d7de; margin: 16px 0;" />
-        <div style="color: #57606a; font-size: 12px; line-height: 1.5;">
-          <p style="margin: 0;">Reply to this email directly or visit <a href="https://mehulzapadiya.com" style="color: #0969da; text-decoration: none;">my portfolio</a>.</p>
-          <p style="margin: 0;">You are receiving this because you contacted me through my website.</p>
-        </div>
-      </div>
-    `;
 
-    await sendMailHelper({
-      from: ADMIN_EMAIL,
-      to: message.email,
-      subject: `Re: Contact from ${message.name}`,
-      text: body,
-      html: htmlBody
-    });
+    if (!message.email || !message.email.trim()) {
+      return res.status(400).json({ success: false, error: "Visitor email is missing from original message." });
+    }
 
-    const updatedMessage = db.addReplyToMessage(Number(messageId), body);
-    res.json({ success: true, message: "Reply sent and saved successfully.", data: updatedMessage });
+    try {
+      console.log(`[Admin Reply] Sending reply to visitor: ${message.email} (Message ID: ${messageId})`);
+      const emailResult = await sendAdminReplyEmail({
+        visitorName: message.name,
+        visitorEmail: message.email,
+        originalSubject: message.subject,
+        reply: body.trim(),
+      });
+
+      let updatedMessage: Message | undefined;
+      const hasValidIndex = typeof replyIndex === "number" && replyIndex >= 0;
+
+      if (hasValidIndex) {
+        updatedMessage = db.updateReplyInMessage(Number(messageId), replyIndex, {
+          body: body.trim(),
+          emailStatus: "SENT",
+          providerMessageId: emailResult.emailId || undefined,
+          sentAt: new Date().toISOString(),
+          emailError: undefined,
+        });
+      } else {
+        updatedMessage = db.addReplyToMessage(Number(messageId), {
+          body: body.trim(),
+          emailStatus: "SENT",
+          providerMessageId: emailResult.emailId || undefined,
+          sentAt: new Date().toISOString()
+        });
+      }
+
+      // Automatically mark message as read upon successful reply
+      db.updateMessage(Number(messageId), { read: true });
+
+      console.log(`[Admin Reply Success] Provider: ${emailResult.provider}, Message ID: ${emailResult.emailId}`);
+      res.json({
+        success: true,
+        message: "Reply sent and delivered successfully to visitor's email.",
+        data: updatedMessage,
+        emailId: emailResult.emailId
+      });
+    } catch (emailError: any) {
+      const errorMsg = emailError.message || String(emailError);
+      console.error(`[Admin Reply Failed] To: ${message.email}, Error: ${errorMsg}`);
+
+      let updatedMessage: Message | undefined;
+      const hasValidIndex = typeof replyIndex === "number" && replyIndex >= 0;
+
+      if (hasValidIndex) {
+        updatedMessage = db.updateReplyInMessage(Number(messageId), replyIndex, {
+          body: body.trim(),
+          emailStatus: "FAILED",
+          emailError: errorMsg,
+          failedAt: new Date().toISOString(),
+        });
+      } else {
+        updatedMessage = db.addReplyToMessage(Number(messageId), {
+          body: body.trim(),
+          emailStatus: "FAILED",
+          emailError: errorMsg,
+          failedAt: new Date().toISOString()
+        });
+      }
+
+      return res.status(500).json({
+        success: false,
+        error: errorMsg || "Failed to send email to visitor.",
+        data: updatedMessage
+      });
+    }
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }

@@ -616,7 +616,7 @@ export class Database {
     return false;
   }
 
-  addReplyToMessage(id: number, body: string): Message | undefined {
+  addReplyToMessage(id: number, replyData: Omit<import("../src/types.js").MessageReply, "created_at"> & { created_at?: string }): Message | undefined {
     const idx = this.data.messages.findIndex(m => m.id === id);
     if (idx === -1) return undefined;
     
@@ -625,10 +625,32 @@ export class Database {
       message.replies = [];
     }
     message.replies.push({
-      body,
-      created_at: new Date().toISOString()
+      ...replyData,
+      created_at: replyData.created_at || new Date().toISOString()
     });
     
+    this.save();
+    return message;
+  }
+
+  updateReplyInMessage(
+    id: number,
+    replyIndex: number,
+    replyUpdate: Partial<import("../src/types.js").MessageReply>
+  ): Message | undefined {
+    const idx = this.data.messages.findIndex(m => m.id === id);
+    if (idx === -1) return undefined;
+
+    const message = this.data.messages[idx];
+    if (!message.replies || !message.replies[replyIndex]) {
+      return undefined;
+    }
+
+    message.replies[replyIndex] = {
+      ...message.replies[replyIndex],
+      ...replyUpdate
+    };
+
     this.save();
     return message;
   }
