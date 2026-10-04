@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "motion/react";
-import { ArrowRight, Download, Send, Sparkles } from "lucide-react";
+import { ArrowRight, Download, Send, Sparkles, MonitorSmartphone } from "lucide-react";
 import { Profile, Skill } from "../types.js";
 
 interface HeroProps {
@@ -15,6 +15,26 @@ export default function Hero({ profile, skills }: HeroProps) {
   const roles = profile.hero_titles && profile.hero_titles.length > 0
     ? profile.hero_titles
     : ["Python Developer", "AI Engineer", "Data Analytics Enthusiast", "Full-Stack Web Developer"];
+    
+  const [installPrompt, setInstallPrompt] = useState<any>(null);
+
+  useEffect(() => {
+    const handleInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handleInstallPrompt);
+    return () => window.removeEventListener('beforeinstallprompt', handleInstallPrompt);
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setInstallPrompt(null);
+    }
+  };
 
   // Typing effect
   useEffect(() => {
@@ -111,6 +131,16 @@ export default function Hero({ profile, skills }: HeroProps) {
             transition={{ duration: 0.6, delay: 0.4 }}
             className="flex flex-wrap gap-4 w-full sm:w-auto"
           >
+            {installPrompt && (
+              <button
+                onClick={handleInstallClick}
+                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-full bg-emerald-600 hover:bg-emerald-500 font-medium text-white text-sm shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
+              >
+                <MonitorSmartphone className="h-4 w-4" />
+                <span>Install Desktop App</span>
+              </button>
+            )}
+
             <button
               onClick={() => handleScrollToSection("#projects")}
               className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 font-medium text-white text-sm shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"

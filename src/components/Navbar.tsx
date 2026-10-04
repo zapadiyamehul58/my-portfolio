@@ -1,5 +1,5 @@
 import { useState, useEffect, MouseEvent } from "react";
-import { Menu, X, User, Code2, GraduationCap, Trophy, Mail, ShieldAlert } from "lucide-react";
+import { Menu, X, User, Code2, GraduationCap, Trophy, Mail, ShieldAlert, Download } from "lucide-react";
 import { isLoggedIn } from "../lib/api.js";
 
 interface NavbarProps {
@@ -11,14 +11,35 @@ export default function Navbar({ currentSection }: NavbarProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [adminLogged, setAdminLogged] = useState(false);
 
+  const [installPrompt, setInstallPrompt] = useState<any>(null);
+
   useEffect(() => {
     const handleScroll = () => {
       setIsScrolled(window.scrollY > 50);
     };
     window.addEventListener("scroll", handleScroll);
     setAdminLogged(isLoggedIn());
-    return () => window.removeEventListener("scroll", handleScroll);
+    
+    const handleInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handleInstallPrompt);
+
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener('beforeinstallprompt', handleInstallPrompt);
+    };
   }, []);
+
+  const handleInstallClick = async () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setInstallPrompt(null);
+    }
+  };
 
   const navLinks = [
     { name: "Home", href: "#home", icon: null },
@@ -83,7 +104,15 @@ export default function Navbar({ currentSection }: NavbarProps) {
                 </a>
               );
             })}
-            
+            {installPrompt && (
+              <button
+                onClick={handleInstallClick}
+                className="ml-2 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 transition-all duration-200 shadow-[0_0_15px_-3px_rgba(99,102,241,0.4)]"
+              >
+                <Download className="h-4 w-4" />
+                Install App
+              </button>
+            )}
           </div>
 
           {/* Mobile Menu Button */}
@@ -120,6 +149,15 @@ export default function Navbar({ currentSection }: NavbarProps) {
               </a>
             );
           })}
+          {installPrompt && (
+            <button
+              onClick={handleInstallClick}
+              className="w-full mt-2 flex items-center gap-3 px-4 py-3 rounded-xl text-base font-semibold text-white bg-indigo-600 hover:bg-indigo-500 transition-all"
+            >
+              <Download className="h-5 w-5 opacity-90" />
+              Install App
+            </button>
+          )}
         </div>
       )}
     </nav>
