@@ -33,7 +33,10 @@ export default function Navbar({ currentSection }: NavbarProps) {
   }, []);
 
   const handleInstallClick = async () => {
-    if (!installPrompt) return;
+    if (!installPrompt) {
+      alert("To install the app, please click the small 'Install' icon located in your browser's address bar (next to the bookmark star), or check your browser menu!");
+      return;
+    }
     installPrompt.prompt();
     const { outcome } = await installPrompt.userChoice;
     if (outcome === 'accepted') {
@@ -104,15 +107,13 @@ export default function Navbar({ currentSection }: NavbarProps) {
                 </a>
               );
             })}
-            {installPrompt && (
-              <button
-                onClick={handleInstallClick}
-                className="ml-2 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 transition-all duration-200 shadow-[0_0_15px_-3px_rgba(99,102,241,0.4)]"
-              >
-                <Download className="h-4 w-4" />
-                Install App
-              </button>
-            )}
+            <button
+              onClick={handleInstallClick}
+              className="ml-2 flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-500 transition-all duration-200 shadow-[0_0_15px_-3px_rgba(99,102,241,0.4)]"
+            >
+              <Download className="h-4 w-4" />
+              Install App
+            </button>
           </div>
 
           {/* Mobile Menu Button */}
@@ -149,15 +150,13 @@ export default function Navbar({ currentSection }: NavbarProps) {
               </a>
             );
           })}
-          {installPrompt && (
-            <button
-              onClick={handleInstallClick}
-              className="w-full mt-2 flex items-center gap-3 px-4 py-3 rounded-xl text-base font-semibold text-white bg-indigo-600 hover:bg-indigo-500 transition-all"
-            >
-              <Download className="h-5 w-5 opacity-90" />
-              Install App
-            </button>
-          )}
+          <button
+            onClick={handleInstallClick}
+            className="w-full mt-2 flex items-center gap-3 px-4 py-3 rounded-xl text-base font-semibold text-white bg-indigo-600 hover:bg-indigo-500 transition-all"
+          >
+            <Download className="h-5 w-5 opacity-90" />
+            Install App
+          </button>
         </div>
       )}
     </nav>

@@ -28,7 +28,10 @@ export default function Hero({ profile, skills }: HeroProps) {
   }, []);
 
   const handleInstallClick = async () => {
-    if (!installPrompt) return;
+    if (!installPrompt) {
+      alert("To install the app, please click the small 'Install' icon located in your browser's address bar (next to the bookmark star), or check your browser menu!");
+      return;
+    }
     installPrompt.prompt();
     const { outcome } = await installPrompt.userChoice;
     if (outcome === 'accepted') {
@@ -130,16 +133,13 @@ export default function Hero({ profile, skills }: HeroProps) {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.4 }}
             className="flex flex-wrap gap-4 w-full sm:w-auto"
-          >
-            {installPrompt && (
-              <button
-                onClick={handleInstallClick}
-                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-full bg-emerald-600 hover:bg-emerald-500 font-medium text-white text-sm shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
-              >
-                <MonitorSmartphone className="h-4 w-4" />
-                <span>Install Desktop App</span>
-              </button>
-            )}
+            <button
+              onClick={handleInstallClick}
+              className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-full bg-emerald-600 hover:bg-emerald-500 font-medium text-white text-sm shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
+            >
+              <MonitorSmartphone className="h-4 w-4" />
+              <span>Install Desktop App</span>
+            </button>
 
             <button
               onClick={() => handleScrollToSection("#projects")}
