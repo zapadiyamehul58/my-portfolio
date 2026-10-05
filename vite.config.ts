@@ -14,6 +14,10 @@ export default defineConfig(() => {
         includeAssets: ['favicon.ico', 'favicon.png', 'robots.txt', 'icons/*.png'],
         manifest: false, // We use the manual manifest.webmanifest link in index.html, but let plugin know or we can let it inject
         injectRegister: 'auto',
+        devOptions: {
+          enabled: true, // Allow testing PWA offline mode in development
+          type: 'module',
+        },
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
           runtimeCaching: [
