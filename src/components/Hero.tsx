@@ -134,17 +134,6 @@ export default function Hero({ profile, skills }: HeroProps) {
             transition={{ duration: 0.6, delay: 0.4 }}
             className="flex flex-wrap gap-4 w-full sm:w-auto"
           >
-            <button
-              onClick={handleInstallClick}
-              className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-full bg-emerald-600 hover:bg-emerald-500 font-medium text-white text-sm shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
-              title="Install this portfolio as an app to access it offline anywhere."
-            >
-              <MonitorSmartphone className="h-4 w-4" />
-              <div className="flex flex-col items-start leading-tight">
-                <span>Install App</span>
-                <span className="text-[10px] text-emerald-100 font-normal opacity-90">Offline Ready</span>
-              </div>
-            </button>
 
             <button
               onClick={() => handleScrollToSection("#projects")}
